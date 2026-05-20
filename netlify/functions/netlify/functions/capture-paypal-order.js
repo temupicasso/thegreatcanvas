@@ -44,24 +44,45 @@ exports.handler = async (event) => {
   if (captureData.status !== "COMPLETED") {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: "Payment not completed" }),
+      body: JSON.stringify({ error: "Payment not completed", captureData }),
     };
   }
 
   const userId = captureData.purchase_units?.[0]?.custom_id;
 
-  const { data: user } = await supabase
+  if (!userId) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ error: "Missing userId", captureData }),
+    };
+  }
+
+  const { data: user, error: userError } = await supabase
     .from("users")
     .select("credits")
     .eq("id", userId)
     .single();
 
-  const newCredits = (user?.credits || 0) + 100;
+  if (userError || !user) {
+    return {
+      statusCode: 404,
+      body: JSON.stringify({ error: "User not found", userId, userError }),
+    };
+  }
 
-  await supabase
+  const newCredits = (user.credits || 0) + 100;
+
+  const { error: updateError } = await supabase
     .from("users")
     .update({ credits: newCredits })
     .eq("id", userId);
+
+  if (updateError) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Could not update credits", updateError }),
+    };
+  }
 
   return {
     statusCode: 200,
