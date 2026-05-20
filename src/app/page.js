@@ -73,54 +73,56 @@ export default function Home() {
     setupUser();
   }, []);
 
-  useEffect(() => {
-    async function handlePaypalReturn() {
-      const params = new URLSearchParams(window.location.search);
-      const token = params.get("token");
-      const paypalStatus = params.get("paypal");
+useEffect(() => {
+  async function handlePaypalReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    const paypalStatus = params.get("paypal");
+    const userId = params.get("userId");
 
-      if (paypalStatus === "cancel") {
-        window.history.replaceState({}, "", "/");
-        alert("Payment cancelled.");
-        return;
-      }
-
-      if (!token || paypalStatus !== "success") return;
-
-      const res = await fetch("/.netlify/functions/capture-paypal-order", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-body: JSON.stringify({
-  orderId: token,
-  userId: params.get("userId"),
-}),      });
-
-      const text = await res.text();
-
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = { error: "Non-JSON response", raw: text };
-      }
-
-      console.log("CAPTURE STATUS:", res.status);
-      console.log("CAPTURE RESPONSE:", data);
-
-      if (data.credits !== undefined) {
-        setCredits(data.credits);
-        alert("Payment successful! 100 credits added.");
-      } else {
-        alert(JSON.stringify(data, null, 2));
-      }
-
+    if (paypalStatus === "cancel") {
       window.history.replaceState({}, "", "/");
+      alert("Payment cancelled.");
+      return;
     }
 
-    handlePaypalReturn();
-  }, []);
+    if (!token || paypalStatus !== "success") return;
+
+    const res = await fetch("/.netlify/functions/capture-paypal-order", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        orderId: token,
+        userId: userId,
+      }),
+    });
+
+    const text = await res.text();
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { error: "Non-JSON response", raw: text };
+    }
+
+    console.log("CAPTURE STATUS:", res.status);
+    console.log("CAPTURE RESPONSE:", data);
+
+    if (data.credits !== undefined) {
+      setCredits(data.credits);
+      alert("Payment successful! 100 credits added.");
+    } else {
+      alert(JSON.stringify(data, null, 2));
+    }
+
+    window.history.replaceState({}, "", "/");
+  }
+
+  handlePaypalReturn();
+}, []);
 
   const saveUsername = async () => {
     const cleaned = newUsername.trim();
