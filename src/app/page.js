@@ -73,56 +73,46 @@ export default function Home() {
     setupUser();
   }, []);
 
-useEffect(() => {
-  async function handlePaypalReturn() {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("token");
-    const paypalStatus = params.get("paypal");
-    const userId = params.get("userId");
+  useEffect(() => {
+    async function handlePaypalReturn() {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("token");
+      const paypalStatus = params.get("paypal");
+      const paypalUserId = params.get("userId");
 
-    if (paypalStatus === "cancel") {
+      if (paypalStatus === "cancel") {
+        window.history.replaceState({}, "", "/");
+        alert("Payment cancelled.");
+        return;
+      }
+
+      if (!token || paypalStatus !== "success") return;
+
+      const res = await fetch("/.netlify/functions/capture-paypal-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orderId: token,
+          userId: paypalUserId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.credits !== undefined) {
+        setCredits(data.credits);
+        alert("Payment successful! 100 credits added.");
+      } else {
+        alert("Payment succeeded, but credits could not be added. Please contact support.");
+      }
+
       window.history.replaceState({}, "", "/");
-      alert("Payment cancelled.");
-      return;
     }
 
-    if (!token || paypalStatus !== "success") return;
-
-    const res = await fetch("/.netlify/functions/capture-paypal-order", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        orderId: token,
-        userId: userId,
-      }),
-    });
-
-    const text = await res.text();
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { error: "Non-JSON response", raw: text };
-    }
-
-    console.log("CAPTURE STATUS:", res.status);
-    console.log("CAPTURE RESPONSE:", data);
-
-    if (data.credits !== undefined) {
-      setCredits(data.credits);
-      alert("Payment successful! 100 credits added.");
-    } else {
-      alert(JSON.stringify(data, null, 2));
-    }
-
-    window.history.replaceState({}, "", "/");
-  }
-
-  handlePaypalReturn();
-}, []);
+    handlePaypalReturn();
+  }, []);
 
   const saveUsername = async () => {
     const cleaned = newUsername.trim();
@@ -164,7 +154,6 @@ useEffect(() => {
       .eq("id", userId);
 
     if (userError) {
-      console.log("USER UPDATE ERROR:", userError);
       alert("Could not update username.");
       return;
     }
@@ -175,7 +164,6 @@ useEffect(() => {
       .eq("username", username);
 
     if (squareError) {
-      console.log("SQUARE UPDATE ERROR:", squareError);
       alert("Username saved, but owned pixels could not update.");
       return;
     }
@@ -213,10 +201,7 @@ useEffect(() => {
   const loadCanvas = async () => {
     const { data, error } = await supabase.from("squares").select("*");
 
-    if (error) {
-      console.log(error);
-      return;
-    }
+    if (error) return;
 
     const grid = Array(GRID_SIZE * GRID_SIZE).fill({
       color: "#ffffff",
@@ -302,7 +287,7 @@ useEffect(() => {
     const data = await res.json();
 
     if (!data.url) {
-      alert("Could not start PayPal checkout.");
+      alert("Could not start PayPal checkout. Please try again.");
       return;
     }
 
