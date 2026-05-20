@@ -28,13 +28,16 @@ exports.handler = async (event) => {
 
   const tokenData = await tokenRes.json();
 
-  const captureRes = await fetch(`${base}/v2/checkout/orders/${orderId}/capture`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${tokenData.access_token}`,
-      "Content-Type": "application/json",
-    },
-  });
+  const captureRes = await fetch(
+    `${base}/v2/checkout/orders/${orderId}/capture`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${tokenData.access_token}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
 
   const captureData = await captureRes.json();
 
@@ -45,7 +48,7 @@ exports.handler = async (event) => {
     };
   }
 
-  const userId = captureData.purchase_units?.[0]?.payments?.captures?.[0]?.custom_id;
+  const userId = captureData.purchase_units?.[0]?.custom_id;
 
   const { data: user } = await supabase
     .from("users")
