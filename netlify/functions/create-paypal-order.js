@@ -31,12 +31,11 @@ exports.handler = async (event) => {
       intent: "CAPTURE",
       purchase_units: [
         {
-          custom_id: userId,
           amount: {
             currency_code: "USD",
             value: "1.00",
           },
-          description: "100 The Great Canvas credits",
+          custom_id: userId,   // THIS IS THE FIX
         },
       ],
       application_context: {
@@ -47,10 +46,16 @@ exports.handler = async (event) => {
   });
 
   const orderData = await orderRes.json();
-  const approve = orderData.links?.find((l) => l.rel === "approve");
+
+  const approveLink = orderData.links?.find(
+    (link) => link.rel === "approve"
+  )?.href;
 
   return {
     statusCode: 200,
-    body: JSON.stringify({ url: approve?.href }),
+    body: JSON.stringify({
+      url: approveLink,
+      debug: orderData,
+    }),
   };
 };
