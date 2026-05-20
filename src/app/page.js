@@ -9,7 +9,9 @@ export default function Home() {
     "https://www.paypal.com/ncp/payment/C6ZRQAW2LCT3Y";
 
   const [username, setUsername] = useState("Loading...");
+  const [newUsername, setNewUsername] = useState("");
   const [credits, setCredits] = useState(0);
+
   const [squares, setSquares] = useState(
     Array(GRID_SIZE * GRID_SIZE).fill({
       color: "#ffffff",
@@ -38,12 +40,13 @@ export default function Home() {
       }
 
       setUsername(saved);
+      setNewUsername(saved);
 
       const { data } = await supabase
         .from("users")
         .select("*")
         .eq("username", saved)
-        .single();
+        .maybeSingle();
 
       if (!data) {
         await supabase.from("users").insert({
@@ -60,6 +63,80 @@ export default function Home() {
     setupUser();
   }, []);
 
+  const saveUsername = async () => {
+    const cleaned = newUsername.trim();
+
+    if (!cleaned) {
+      alert("Username cannot be empty.");
+      return;
+    }
+
+    if (cleaned.length > 20) {
+      alert("Username must be 20 characters or less.");
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(cleaned)) {
+      alert("Use only letters, numbers, and underscores.");
+      return;
+    }
+
+    if (cleaned === username) {
+      alert("Username unchanged.");
+      return;
+    }
+
+    const { data: existingUser } = await supabase
+      .from("users")
+      .select("*")
+      .eq("username", cleaned)
+      .maybeSingle();
+
+    if (existingUser) {
+      alert("Username already taken.");
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("users").insert({
+      username: cleaned,
+      credits,
+    });
+
+    if (insertError) {
+      console.log("INSERT USER ERROR:", insertError);
+      alert("Could not create new username.");
+      return;
+    }
+
+    const { error: squareError } = await supabase
+      .from("squares")
+      .update({ username: cleaned })
+      .eq("username", username);
+
+    if (squareError) {
+      console.log("SQUARE UPDATE ERROR:", squareError);
+      alert("Username saved, but owned pixels could not update.");
+      return;
+    }
+
+    const { error: deleteError } = await supabase
+      .from("users")
+      .delete()
+      .eq("username", username);
+
+    if (deleteError) {
+      console.log("DELETE OLD USER ERROR:", deleteError);
+    }
+
+    localStorage.setItem("username", cleaned);
+    setUsername(cleaned);
+    setNewUsername(cleaned);
+
+    await loadCanvas();
+
+    alert("Username updated.");
+  };
+
   const loadCredits = async () => {
     if (username === "Loading...") return;
 
@@ -67,17 +144,17 @@ export default function Home() {
       .from("users")
       .select("credits")
       .eq("username", username)
-      .single();
+      .maybeSingle();
 
     if (data) setCredits(data.credits);
   };
 
-  const updateCredits = async (newCredits) => {
-    setCredits(newCredits);
+  const updateCredits = async (newCreditsValue) => {
+    setCredits(newCreditsValue);
 
     await supabase
       .from("users")
-      .update({ credits: newCredits })
+      .update({ credits: newCreditsValue })
       .eq("username", username);
   };
 
@@ -248,12 +325,10 @@ export default function Home() {
   const handleWheel = (e) => {
     e.preventDefault();
 
-    const zoomSpeed = 0.1;
-
     if (e.deltaY < 0) {
-      setScale((prev) => Math.min(prev + zoomSpeed, 4));
+      setScale((prev) => Math.min(prev + 0.1, 4));
     } else {
-      setScale((prev) => Math.max(prev - zoomSpeed, 0.5));
+      setScale((prev) => Math.max(prev - 0.1, 0.5));
     }
   };
 
@@ -293,12 +368,29 @@ export default function Home() {
       onTouchMove={handleTouchMove}
       onWheel={handleWheel}
     >
-      <div className="fixed top-4 left-4 z-50 bg-white p-4 rounded shadow flex gap-4 items-center flex-wrap max-w-[95vw]">
+      <div
+        className="fixed top-4 left-4 z-50 bg-white p-4 rounded shadow flex gap-4 items-center flex-wrap max-w-[95vw]"
+        onMouseDown={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+      >
         <h1 className="font-bold text-xl">The Great Canvas</h1>
 
-        <p>
-          You: <span className="font-bold">{username}</span>
-        </p>
+        <div className="flex items-center gap-2">
+          <span>You:</span>
+          <input
+            className="border px-2 py-1 rounded w-32"
+            value={newUsername}
+            onChange={(e) => setNewUsername(e.target.value)}
+          />
+          <button
+            className="bg-black text-white px-3 py-1 rounded"
+            onClick={saveUsername}
+          >
+            Update
+          </button>
+        </div>
 
         <p className="font-bold text-green-600">Credits: {credits}</p>
 
