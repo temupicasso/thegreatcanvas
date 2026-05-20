@@ -95,13 +95,23 @@ export default function Home() {
         body: JSON.stringify({ orderId: token }),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { error: "Non-JSON response", raw: text };
+      }
+
+      console.log("CAPTURE STATUS:", res.status);
+      console.log("CAPTURE RESPONSE:", data);
 
       if (data.credits !== undefined) {
         setCredits(data.credits);
         alert("Payment successful! 100 credits added.");
       } else {
-        alert("Payment was received, but credits could not be added.");
+        alert(JSON.stringify(data, null, 2));
       }
 
       window.history.replaceState({}, "", "/");
