@@ -31,31 +31,27 @@ exports.handler = async (event) => {
       intent: "CAPTURE",
       purchase_units: [
         {
+          custom_id: userId,
           amount: {
             currency_code: "USD",
             value: "1.00",
           },
-          custom_id: userId,   // THIS IS THE FIX
         },
       ],
       application_context: {
-        return_url: "https://thegreatcanvas.netlify.app/?paypal=success",
+        return_url: `https://thegreatcanvas.netlify.app/?paypal=success&userId=${encodeURIComponent(
+          userId
+        )}`,
         cancel_url: "https://thegreatcanvas.netlify.app/?paypal=cancel",
       },
     }),
   });
 
   const orderData = await orderRes.json();
-
-  const approveLink = orderData.links?.find(
-    (link) => link.rel === "approve"
-  )?.href;
+  const approve = orderData.links?.find((l) => l.rel === "approve");
 
   return {
     statusCode: 200,
-    body: JSON.stringify({
-      url: approveLink,
-      debug: orderData,
-    }),
+    body: JSON.stringify({ url: approve?.href }),
   };
 };

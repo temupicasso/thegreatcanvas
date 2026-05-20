@@ -1,8 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 
 exports.handler = async (event) => {
-  const { orderId } = JSON.parse(event.body || "{}");
-
+const { orderId, userId: fallbackUserId } = JSON.parse(event.body || "{}");
   console.log("ORDER ID:", orderId);
 
   const supabase = createClient(
@@ -54,8 +53,7 @@ exports.handler = async (event) => {
     };
   }
 
-  const userId = captureData.purchase_units?.[0]?.custom_id;
-
+const userId = captureData.purchase_units?.[0]?.custom_id || fallbackUserId;
   console.log("USER ID:", userId);
 
   if (!userId) {
