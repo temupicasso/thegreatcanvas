@@ -5,11 +5,10 @@ import { supabase } from "../lib/supabase";
 
 export default function Home() {
   const GRID_SIZE = 50;
-  const PAYPAL_LINK =
-    "https://www.paypal.com/ncp/payment/C6ZRQAW2LCT3Y";
 
   const [username, setUsername] = useState("Loading...");
   const [newUsername, setNewUsername] = useState("");
+  const [userId, setUserId] = useState("");
   const [credits, setCredits] = useState(0);
 
   const [squares, setSquares] = useState(
@@ -32,35 +31,83 @@ export default function Home() {
 
   useEffect(() => {
     async function setupUser() {
-      let saved = localStorage.getItem("username");
+      let savedUsername = localStorage.getItem("username");
+      let savedUserId = localStorage.getItem("userId");
 
-      if (!saved) {
-        saved = "Guest" + Math.floor(1000 + Math.random() * 9000);
-        localStorage.setItem("username", saved);
+      if (!savedUserId) {
+        savedUserId = crypto.randomUUID();
+        localStorage.setItem("userId", savedUserId);
       }
 
-      setUsername(saved);
-      setNewUsername(saved);
+      if (!savedUsername) {
+        savedUsername = "Guest" + Math.floor(1000 + Math.random() * 9000);
+        localStorage.setItem("username", savedUsername);
+      }
+
+      setUserId(savedUserId);
+      setUsername(savedUsername);
+      setNewUsername(savedUsername);
 
       const { data } = await supabase
         .from("users")
         .select("*")
-        .eq("username", saved)
+        .eq("id", savedUserId)
         .maybeSingle();
 
       if (!data) {
         await supabase.from("users").insert({
-          username: saved,
+          id: savedUserId,
+          username: savedUsername,
           credits: 0,
         });
 
         setCredits(0);
       } else {
-        setCredits(data.credits);
+        setUsername(data.username);
+        setNewUsername(data.username);
+        localStorage.setItem("username", data.username);
+        setCredits(data.credits || 0);
       }
     }
 
     setupUser();
+  }, []);
+
+  useEffect(() => {
+    async function handlePaypalReturn() {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("token");
+      const paypalStatus = params.get("paypal");
+
+      if (paypalStatus === "cancel") {
+        window.history.replaceState({}, "", "/");
+        alert("Payment cancelled.");
+        return;
+      }
+
+      if (!token || paypalStatus !== "success") return;
+
+      const res = await fetch("/.netlify/functions/capture-paypal-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ orderId: token }),
+      });
+
+      const data = await res.json();
+
+      if (data.credits !== undefined) {
+        setCredits(data.credits);
+        alert("Payment successful! 100 credits added.");
+      } else {
+        alert("Payment was received, but credits could not be added.");
+      }
+
+      window.history.replaceState({}, "", "/");
+    }
+
+    handlePaypalReturn();
   }, []);
 
   const saveUsername = async () => {
@@ -97,14 +144,14 @@ export default function Home() {
       return;
     }
 
-    const { error: insertError } = await supabase.from("users").insert({
-      username: cleaned,
-      credits,
-    });
+    const { error: userError } = await supabase
+      .from("users")
+      .update({ username: cleaned })
+      .eq("id", userId);
 
-    if (insertError) {
-      console.log("INSERT USER ERROR:", insertError);
-      alert("Could not create new username.");
+    if (userError) {
+      console.log("USER UPDATE ERROR:", userError);
+      alert("Could not update username.");
       return;
     }
 
@@ -119,15 +166,6 @@ export default function Home() {
       return;
     }
 
-    const { error: deleteError } = await supabase
-      .from("users")
-      .delete()
-      .eq("username", username);
-
-    if (deleteError) {
-      console.log("DELETE OLD USER ERROR:", deleteError);
-    }
-
     localStorage.setItem("username", cleaned);
     setUsername(cleaned);
     setNewUsername(cleaned);
@@ -138,15 +176,15 @@ export default function Home() {
   };
 
   const loadCredits = async () => {
-    if (username === "Loading...") return;
+    if (!userId) return;
 
     const { data } = await supabase
       .from("users")
       .select("credits")
-      .eq("username", username)
+      .eq("id", userId)
       .maybeSingle();
 
-    if (data) setCredits(data.credits);
+    if (data) setCredits(data.credits || 0);
   };
 
   const updateCredits = async (newCreditsValue) => {
@@ -155,7 +193,7 @@ export default function Home() {
     await supabase
       .from("users")
       .update({ credits: newCreditsValue })
-      .eq("username", username);
+      .eq("id", userId);
   };
 
   const loadCanvas = async () => {
@@ -234,13 +272,27 @@ export default function Home() {
   }, []);
 
   const buyCredits = async () => {
-    await navigator.clipboard.writeText(username);
+    if (!userId) {
+      alert("User is still loading. Try again.");
+      return;
+    }
 
-    alert(
-      `Your username "${username}" has been copied.\n\nPaste/send this username after paying so credits can be added manually.`
-    );
+    const res = await fetch("/.netlify/functions/create-paypal-order", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ userId }),
+    });
 
-    window.open(PAYPAL_LINK, "_blank");
+    const data = await res.json();
+
+    if (!data.url) {
+      alert("Could not start PayPal checkout.");
+      return;
+    }
+
+    window.location.href = data.url;
   };
 
   const paintPixel = async (x, y, i) => {
