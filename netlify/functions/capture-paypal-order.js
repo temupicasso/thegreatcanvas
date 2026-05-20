@@ -3,6 +3,8 @@ const { createClient } = require("@supabase/supabase-js");
 exports.handler = async (event) => {
   const { orderId } = JSON.parse(event.body || "{}");
 
+  console.log("ORDER ID:", orderId);
+
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -28,6 +30,8 @@ exports.handler = async (event) => {
 
   const tokenData = await tokenRes.json();
 
+  console.log("TOKEN OK:", !!tokenData.access_token);
+
   const captureRes = await fetch(
     `${base}/v2/checkout/orders/${orderId}/capture`,
     {
@@ -41,6 +45,8 @@ exports.handler = async (event) => {
 
   const captureData = await captureRes.json();
 
+  console.log("CAPTURE DATA:", JSON.stringify(captureData));
+
   if (captureData.status !== "COMPLETED") {
     return {
       statusCode: 400,
@@ -49,6 +55,8 @@ exports.handler = async (event) => {
   }
 
   const userId = captureData.purchase_units?.[0]?.custom_id;
+
+  console.log("USER ID:", userId);
 
   if (!userId) {
     return {
@@ -63,6 +71,9 @@ exports.handler = async (event) => {
     .eq("id", userId)
     .single();
 
+  console.log("SUPABASE USER:", JSON.stringify(user));
+  console.log("SUPABASE USER ERROR:", JSON.stringify(userError));
+
   if (userError || !user) {
     return {
       statusCode: 404,
@@ -76,6 +87,9 @@ exports.handler = async (event) => {
     .from("users")
     .update({ credits: newCredits })
     .eq("id", userId);
+
+  console.log("UPDATE ERROR:", JSON.stringify(updateError));
+  console.log("NEW CREDITS:", newCredits);
 
   if (updateError) {
     return {
